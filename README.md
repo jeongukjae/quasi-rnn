@@ -32,3 +32,4 @@ qrnn(tf.random.uniform((10, 20, 30)))
 
 - [x] Zoneout
 - [ ] Optimize for GPU
+- [ ] Training codes
