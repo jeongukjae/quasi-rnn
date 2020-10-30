@@ -1,6 +1,9 @@
 import tensorflow as tf
 
 
+qrnn_recurrent = tf.load_op_library("./qrnn/qrnn_recurrent.so").qrnn_recurrent
+
+
 class QRNN(tf.keras.layers.Layer):
     """
     Quasi-Recurrent Neural Network
@@ -37,6 +40,7 @@ class QRNN(tf.keras.layers.Layer):
         activation=tf.nn.tanh,
         gate_activation=tf.nn.sigmoid,
         kernel_regularizers=None,
+        use_custom_ops=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -76,6 +80,7 @@ class QRNN(tf.keras.layers.Layer):
             )
 
         self.dropout = tf.keras.layers.Dropout(rate=zoneout_prob)
+        self.use_custom_ops = use_custom_ops
 
     def call(self, input_tensor, training=None):
         rank = len(input_tensor.shape)
@@ -96,8 +101,24 @@ class QRNN(tf.keras.layers.Layer):
             # f = 1 - dropout(1 - f)
             f = tf.subtract(1.0, self.dropout(tf.subtract(1.0, f)))
 
-        pooling_result = qrnn_pooling(self.pooling_method, z, f, o, input_tensor)
+        pooling_fn = qrnn_pooling_custom_ops if self.use_custom_ops else qrnn_pooling
+        pooling_result = pooling_fn(self.pooling_method, z, f, o, input_tensor)
         return pooling_result
+
+
+def qrnn_pooling_custom_ops(pooling_method, z, f, o=None, i=None):
+    with tf.name_scope("qrnn_pooling"):
+        if "i" in pooling_method:
+            z = tf.multiply(i, z)
+        else:
+            z = tf.multiply(tf.subtract(1.0, f), z)
+
+        outputs = qrnn_recurrent(z, f)
+
+        if "o" in pooling_method:
+            outputs = tf.multiply(outputs, o)
+
+        return outputs
 
 
 def qrnn_pooling(pooling_method, z, f, o=None, i=None):
